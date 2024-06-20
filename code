@@ -1,0 +1,52 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
+
+def angle(p1, p2, p3):
+    v1 = p1 - p2
+    v2 = p3 - p2
+    return np.arccos(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
+
+def pull_to_90_degrees(curve, iterations=100, step_size=0.01):
+    for _ in range(iterations):
+        new_curve = curve.copy()
+        for i in range(1, len(curve) - 1):
+            current_angle = angle(curve[i-1], curve[i], curve[i+1])
+            angle_diff = np.pi/2 - current_angle
+            
+            # Move the point perpendicular to the bisector of the angle
+            bisector = curve[i+1] - curve[i-1]
+            perpendicular = np.array([-bisector[1], bisector[0]])
+            perpendicular /= np.linalg.norm(perpendicular)
+            
+            new_curve[i] += step_size * angle_diff * perpendicular
+        
+        curve = new_curve
+    
+    return curve
+
+# Create an initial curve
+t = np.linspace(0, 1, 100)
+x = np.sin(2 * np.pi * t)
+y = np.cos(4 * np.pi * t)
+curve = np.column_stack((x, y))
+
+# Apply the "pulling" flow
+final_curve = pull_to_90_degrees(curve)
+
+# Plot the results
+plt.figure(figsize=(12, 6))
+plt.subplot(121)
+plt.plot(curve[:, 0], curve[:, 1], 'b-', label='Initial Curve')
+plt.title('Initial Curve')
+plt.axis('equal')
+plt.legend()
+
+plt.subplot(122)
+plt.plot(final_curve[:, 0], final_curve[:, 1], 'r-', label='Final Curve')
+plt.title('Curve after Pulling to 90-degree Angles')
+plt.axis('equal')
+plt.legend()
+
+plt.tight_layout()
+plt.show()
