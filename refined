@@ -1,0 +1,113 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from sympy import symbols, expand, I
+from scipy import stats
+
+def generate_complex_pythagorean_triples(n):
+    triples = []
+    for m in range(-n, n+1):
+        for k in range(-n, n+1):
+            if m == 0 and k == 0:
+                continue
+            a = complex(m*m - k*k, -2*m*k)
+            b = complex(2*m*k, m*m - k*k)
+            c = complex(m*m + k*k, 0)
+            triples.append((a, b, c))
+    return triples
+
+def elliptic_curve(a, b):
+    x, y = symbols('x y')
+    return y**2 - (x**3 + a*x + b)
+
+def j_invariant(a, b):
+    return 1728 * (4*a**3) / (4*a**3 + 27*b**2)
+
+def points_near_curve(curve, triples, epsilon=1e-3):  # Increased epsilon
+    x, y = symbols('x y')
+    points = []
+    for a, _, c in triples:
+        x_val = a.real / c.real
+        y_val = a.imag / c.real
+        if abs(complex(curve.subs([(x, x_val), (y, y_val)]))) < epsilon:
+            points.append((x_val, y_val))
+    return sorted(points, key=lambda p: p[0])
+
+def calculate_angles(points):
+    angles = []
+    for i in range(len(points) - 1):
+        v1 = np.array(points[i+1]) - np.array(points[i])
+        v2 = np.array([1, 0])  # reference vector
+        angle = np.arctan2(np.linalg.det([v1,v2]), np.dot(v1,v2))
+        angles.append(angle)
+    return angles
+
+def analyze_distribution(angles):
+    if len(angles) < 2:
+        return None, None
+    kde = stats.gaussian_kde(angles)
+    x = np.linspace(min(angles), max(angles), 1000)
+    return x, kde(x)
+
+def calculate_entropy(angles):
+    if len(angles) < 2:
+        return None
+    hist, _ = np.histogram(angles, bins=min(50, len(angles)//2), density=True)
+    return -np.sum(hist * np.log(hist + 1e-10))
+
+def run_experiment(a, b, max_n, step):
+    curve = elliptic_curve(a, b)
+    j = j_invariant(a, b)
+    
+    print(f"Running experiment for curve y^2 = x^3 + {a}x + {b}")
+    print(f"J-invariant: {j}")
+    
+    distributions = []
+    entropies = []
+    
+    for n in range(step, max_n + 1, step):
+        print(f"Generating triples for n = {n}")
+        triples = generate_complex_pythagorean_triples(n)
+        points = points_near_curve(curve, triples)
+        angles = calculate_angles(points)
+        
+        if len(angles) < 2:
+            print(f"Not enough points found for n = {n}, skipping.")
+            continue
+        
+        x, dist = analyze_distribution(angles)
+        if x is not None and dist is not None:
+            distributions.append((x, dist))
+        
+        entropy = calculate_entropy(angles)
+        if entropy is not None:
+            entropies.append(entropy)
+    
+    if distributions:
+        plt.figure(figsize=(12, 6))
+        for i, (x, dist) in enumerate(distributions):
+            plt.plot(x, dist, label=f'n={step*(i+1)}')
+        plt.title(f'Angle Distribution for j={j}')
+        plt.legend()
+        plt.show()
+    
+    if entropies:
+        plt.figure(figsize=(12, 6))
+        plt.plot(range(step, step*(len(entropies)+1), step), entropies)
+        plt.axhline(y=np.log(2*np.pi), color='r', linestyle='--')
+        plt.title(f'Entropy Convergence for j={j}')
+        plt.xlabel('n')
+        plt.ylabel('Entropy')
+        plt.show()
+    
+    return entropies[-1] if entropies else None
+
+# Run experiments for different curves
+curves = [(1, 0), (0, 1), (1, 1)]
+for a, b in curves:
+    final_entropy = run_experiment(a, b, 200, 20)  # Reduced max_n and increased step
+    if final_entropy is not None:
+        print(f"Final entropy for curve y^2 = x^3 + {a}x + {b}: {final_entropy}")
+        print(f"Difference from log(2π): {abs(final_entropy - np.log(2*np.pi))}")
+    else:
+        print(f"Could not calculate final entropy for curve y^2 = x^3 + {a}x + {b}")
+    print("\n")
